@@ -8,13 +8,12 @@ import org.neo4j.graphdb.Path;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
+import org.neo4j.kernel.StandardExpander;
 import org.neo4j.kernel.Traversal;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +29,8 @@ public class Runner implements Runnable {
     private final Random random = new Random();
     private final PathFinder<Path> pathFinder = GraphAlgoFactory.shortestPath(Traversal.expanderForAllTypes(), 20);
     private int[] nodes;
+    private int pathCount = 0;
+    private int nodeCount = 0;
 
     public Runner(GraphDatabaseAPI db, final long maxNodeId, int timeInSeconds, final int[] nodes) {
         this.db = db;
@@ -54,18 +55,30 @@ public class Runner implements Runnable {
         System.out.println("processors = " + processors);
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
+        Collection<Runner> runners=new ArrayList<Runner>();
         for (int i=0;i<processors;i++) {
             final Runner runner = new Runner(db, maxNodeId, timeInSeconds, nodes);
+            runners.add(runner);
             pool.submit(runner);
         }
         pool.shutdown();
         pool.awaitTermination(timeInSeconds*2, TimeUnit.SECONDS);
         printTop(nodes,maxNodeId,10);
+        printNumbers(runners,timeInSeconds);
+
+    }
+
+    private static void printNumbers(Collection<Runner> runners, int timeInSeconds) {
+        int pathCount=0,nodeCount=0;
+        for (Runner runner : runners) {
+            pathCount+=runner.getPathCount();
+            nodeCount+=runner.getNodeCount();
+        }
+        System.out.printf("In %d seconds %d paths %d nodes %n", timeInSeconds, pathCount, nodeCount);
     }
 
     public void run() {
         long time = System.currentTimeMillis();
-        int pathCount = 0, nodeCount = 0;
         while (true) {
             final Iterable<Path> paths = pathFinder.findAllPaths(randomNode(), randomNode());
             for (Path path : paths) {
@@ -75,7 +88,15 @@ public class Runner implements Runnable {
             }
             if (System.currentTimeMillis() - time > timeInMillis) break;
         }
-        System.out.printf("In %d seconds %d paths %d nodes %n", timeInMillis / 1000, pathCount, nodeCount);
+        System.out.printf("In %d seconds %d paths %d nodes %n", (System.currentTimeMillis() - time)/1000, pathCount, nodeCount);
+    }
+
+    public int getPathCount() {
+        return pathCount;
+    }
+
+    public int getNodeCount() {
+        return nodeCount;
     }
 
     private void countNodes(Path path) {
