@@ -8,7 +8,6 @@ import org.neo4j.graphdb.Path;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
-import org.neo4j.kernel.StandardExpander;
 import org.neo4j.kernel.Traversal;
 
 import java.io.File;
@@ -31,9 +30,11 @@ public class Runner implements Runnable {
     private int[] nodes;
     private int pathCount = 0;
     private int nodeCount = 0;
+    private int id;
 
-    public Runner(GraphDatabaseAPI db, final long maxNodeId, int timeInSeconds, final int[] nodes) {
+    public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes) {
         this.db = db;
+        this.id = id;
         this.timeInMillis = timeInSeconds * 1000;
         this.maxNodeId = maxNodeId;
         this.nodes = nodes;
@@ -57,7 +58,7 @@ public class Runner implements Runnable {
         final int timeInSeconds = 100;
         Collection<Runner> runners=new ArrayList<Runner>();
         for (int i=0;i<processors;i++) {
-            final Runner runner = new Runner(db, maxNodeId, timeInSeconds, nodes);
+            final Runner runner = new Runner(db, i,maxNodeId, timeInSeconds, nodes);
             runners.add(runner);
             pool.submit(runner);
         }
@@ -84,11 +85,11 @@ public class Runner implements Runnable {
             for (Path path : paths) {
                 pathCount++;
                 countNodes(path);
-                nodeCount += path.length();
+                nodeCount += path.length()+1;
             }
             if (System.currentTimeMillis() - time > timeInMillis) break;
         }
-        System.out.printf("In %d seconds %d paths %d nodes %n", (System.currentTimeMillis() - time)/1000, pathCount, nodeCount);
+        System.out.printf("Thread %d In %d seconds %d paths %d nodes %n", id, (System.currentTimeMillis() - time)/1000, pathCount, nodeCount);
     }
 
     public int getPathCount() {
@@ -100,8 +101,13 @@ public class Runner implements Runnable {
     }
 
     private void countNodes(Path path) {
-        for (Node node : path.nodes()) {
-            nodes[((int) node.getId())]++;
+        final Iterator<Node> it = path.nodes().iterator();
+        it.next(); // ignore first
+        while (it.hasNext()) {
+            final Node node = it.next();
+            if (it.hasNext()) { // ignore last
+                nodes[((int) node.getId())]++;
+            }
         }
     }
 
