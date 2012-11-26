@@ -83,11 +83,8 @@ public class Runner implements Runnable {
 
     public void run() {
         long time = System.currentTimeMillis();
-        Node startNode = randomNode();
-        int i = 0;
         while (true) {
-            final Iterable<Path> paths = pathFinder.findAllPaths(startNode, randomNode());
-            if (++i % 20 == 0) startNode = randomNode();
+            final Iterable<Path> paths = pathFinder.findAllPaths(randomNode(), randomNode());
             for (Path path : paths) {
                 pathCount++;
                 countNodes(path);
@@ -143,7 +140,7 @@ public class Runner implements Runnable {
     private Node randomNode() {
         while (true) {
             try {
-                final long id = random.nextLong() % maxNodeId;
+                final long id = ( random.nextLong() % maxNodeId ) % 1000000;
                 return db.getNodeById(id);
             } catch (NotFoundException nfe) {
 
