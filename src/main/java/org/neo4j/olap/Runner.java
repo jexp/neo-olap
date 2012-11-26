@@ -58,7 +58,7 @@ public class Runner implements Runnable {
         System.out.println("processors = " + processors);
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
-        final int maxDepth = 4;
+        final int maxDepth = 10;
         Collection<Runner> runners=new ArrayList<Runner>();
         for (int i=0;i<processors;i++) {
             final Runner runner = new Runner(db, i,maxNodeId, timeInSeconds, nodes, maxDepth);
