@@ -29,8 +29,8 @@ public class Runner implements Runnable {
     private final Random random = new Random();
     private final PathFinder<Path> pathFinder;
     private int[] nodes;
-    private int pathCount = 0;
-    private int nodeCount = 0;
+    private volatile int pathCount = 0;
+    private volatile int nodeCount = 0;
     private int id;
 
     public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes, int maxDepth) {
@@ -54,7 +54,7 @@ public class Runner implements Runnable {
         final long maxNodeId = db.getDependencyResolver().resolveDependency(NodeManager.class).getHighestPossibleIdInUse(Node.class) + 1;
         System.out.println("maxNodeId = " + maxNodeId);
         final int[] nodes = new int[(int)maxNodeId];
-        final int processors = Runtime.getRuntime().availableProcessors() * 2;
+        final int processors = Runtime.getRuntime().availableProcessors() * 4;
         System.out.println("processors = " + processors);
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
@@ -83,8 +83,11 @@ public class Runner implements Runnable {
 
     public void run() {
         long time = System.currentTimeMillis();
+        Node startNode = randomNode();
+        int i = 0;
         while (true) {
-            final Iterable<Path> paths = pathFinder.findAllPaths(randomNode(), randomNode());
+            final Iterable<Path> paths = pathFinder.findAllPaths(startNode, randomNode());
+            if (++i % 20 == 0) startNode = randomNode();
             for (Path path : paths) {
                 pathCount++;
                 countNodes(path);
