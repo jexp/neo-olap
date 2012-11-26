@@ -140,7 +140,7 @@ public class Runner implements Runnable {
     private Node randomNode() {
         while (true) {
             try {
-                final long id = ( random.nextLong() % maxNodeId ) % 1000000;
+                final long id = ( random.nextLong() % maxNodeId ) % 100000;
                 return db.getNodeById(id);
             } catch (NotFoundException nfe) {
 
