@@ -9,6 +9,7 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.Traversal;
+import org.neo4j.kernel.impl.core.NodeManager;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -26,18 +27,19 @@ public class Runner implements Runnable {
     private final int timeInMillis;
     private final long maxNodeId;
     private final Random random = new Random();
-    private final PathFinder<Path> pathFinder = GraphAlgoFactory.shortestPath(Traversal.expanderForAllTypes(), 20);
+    private final PathFinder<Path> pathFinder;
     private int[] nodes;
     private int pathCount = 0;
     private int nodeCount = 0;
     private int id;
 
-    public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes) {
+    public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes, int maxDepth) {
         this.db = db;
         this.id = id;
         this.timeInMillis = timeInSeconds * 1000;
         this.maxNodeId = maxNodeId;
         this.nodes = nodes;
+        pathFinder = GraphAlgoFactory.shortestPath(Traversal.expanderForAllTypes(), maxDepth);
     }
 
     public static void main(String[] args) throws InterruptedException {
@@ -49,16 +51,17 @@ public class Runner implements Runnable {
                 if (db != null) db.shutdown();
             }
         });
-        final long maxNodeId = db.getNodeManager().getHighestPossibleIdInUse(Node.class) + 1;
+        final long maxNodeId = db.getDependencyResolver().resolveDependency(NodeManager.class).getHighestPossibleIdInUse(Node.class) + 1;
         System.out.println("maxNodeId = " + maxNodeId);
         final int[] nodes = new int[(int)maxNodeId];
-        final int processors = Runtime.getRuntime().availableProcessors();
+        final int processors = Runtime.getRuntime().availableProcessors() * 2;
         System.out.println("processors = " + processors);
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
+        final int maxDepth = 4;
         Collection<Runner> runners=new ArrayList<Runner>();
         for (int i=0;i<processors;i++) {
-            final Runner runner = new Runner(db, i,maxNodeId, timeInSeconds, nodes);
+            final Runner runner = new Runner(db, i,maxNodeId, timeInSeconds, nodes, maxDepth);
             runners.add(runner);
             pool.submit(runner);
         }
