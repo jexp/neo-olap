@@ -9,16 +9,13 @@ import org.neo4j.helpers.Predicate;
 import org.neo4j.helpers.collection.FilteringIterable;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
-import org.neo4j.kernel.Traversal;
 import org.neo4j.kernel.impl.core.NodeManager;
-import org.neo4j.tooling.GlobalGraphOperations;
+import org.neo4j.kernel.impl.core.NodeSegmentCacheLoader;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * @author mh
@@ -73,7 +70,7 @@ public class Runner implements Runnable {
         return end.getId() < maxNodeId;
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
         final String path = args[0];
         final GraphDatabaseAPI db = (GraphDatabaseAPI) new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(path).setConfig(config()).newGraphDatabase();
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -82,6 +79,10 @@ public class Runner implements Runnable {
                 if (db != null) db.shutdown();
             }
         });
+        final int processors = Runtime.getRuntime().availableProcessors() * 2;
+        System.out.println("processors = " + processors);
+        final ExecutorService pool = Executors.newFixedThreadPool(processors);
+
         NodeManager nodeManager = db.getDependencyResolver().resolveDependency(NodeManager.class);
         long maxNodeId = nodeManager.getHighestPossibleIdInUse(Node.class) + 1 ;
         long memory = Runtime.getRuntime().freeMemory();
@@ -89,12 +90,9 @@ public class Runner implements Runnable {
         System.out.println("maxNodeId = " + maxNodeId+" memory "+memory+" nodes in memory "+nodesInMemory);
         final long nodeIdLimit = Math.min(nodesInMemory,maxNodeId);
         long time=System.currentTimeMillis();
-        fillCache(db,nodeIdLimit);
-        System.out.println("filled cache with " + nodeIdLimit+" nodes in "+(System.currentTimeMillis()-time)+" ms.");
+        long nodeAndRelCount = fillCache(nodeIdLimit, processors, nodeManager);
+        System.out.println("filled cache with up to " + nodeIdLimit+" nodes, "+nodeAndRelCount+" nodes and relationships in "+(System.currentTimeMillis()-time)+" ms.");
         final int[] nodes = new int[(int)nodeIdLimit];
-        final int processors = Runtime.getRuntime().availableProcessors() * 2;
-        System.out.println("processors = " + processors);
-        final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
         final int maxDepth = 10;
         Collection<Runner> runners=new ArrayList<Runner>();
@@ -110,14 +108,22 @@ public class Runner implements Runnable {
 
     }
 
-    private static void fillCache(GraphDatabaseAPI db, long maxNodeId) {
-        Iterable<Node> allNodes = GlobalGraphOperations.at(db).getAllNodes();
-        for (Node node : allNodes) {
-            for (Relationship relationship : node.getRelationships()) {
-                relationship.getOtherNode(node);
-            }
-            if (--maxNodeId==0) break;
+    private static long fillCache(long maxNodeId, int processors, final NodeManager nodeManager) throws ExecutionException, InterruptedException {
+        final long segment = maxNodeId / processors;
+        final ExecutorService pool = Executors.newFixedThreadPool(processors);
+        Collection<Future<Integer>> futures=new ArrayList<Future<Integer>>(processors);
+        for (int i=0;i<processors;i++) {
+            long start = segment * i;
+            NodeSegmentCacheLoader loader = new NodeSegmentCacheLoader(start, segment, nodeManager);
+            Future<Integer> future = pool.submit(loader);
+            futures.add(future);
         }
+        long count=0;
+        for (Future<Integer> future : futures) {
+            count+=future.get();
+        }
+        pool.shutdown();
+        return count;
     }
 
     private static void printNumbers(Collection<Runner> runners, int timeInSeconds) {
