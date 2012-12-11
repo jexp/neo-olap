@@ -2,14 +2,16 @@ package org.neo4j.olap;
 
 import org.neo4j.graphalgo.GraphAlgoFactory;
 import org.neo4j.graphalgo.PathFinder;
-import org.neo4j.graphdb.Node;
-import org.neo4j.graphdb.NotFoundException;
-import org.neo4j.graphdb.Path;
+import org.neo4j.graphdb.*;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.graphdb.traversal.BranchState;
+import org.neo4j.helpers.Predicate;
+import org.neo4j.helpers.collection.FilteringIterable;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.Traversal;
 import org.neo4j.kernel.impl.core.NodeManager;
+import org.neo4j.tooling.GlobalGraphOperations;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -33,13 +35,42 @@ public class Runner implements Runnable {
     private volatile int nodeCount = 0;
     private int id;
 
+    class RelationshipFilter extends FilteringIterable<Relationship> {
+        RelationshipFilter(final Node node) {
+            super(node.getRelationships(), new Predicate<Relationship>() {
+                @Override
+                public boolean accept(Relationship item) {
+                    return isInNodeRange(item.getOtherNode(node));
+                }
+            });
+        }
+    }
+
     public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes, int maxDepth) {
         this.db = db;
         this.id = id;
         this.timeInMillis = timeInSeconds * 1000;
         this.maxNodeId = maxNodeId;
         this.nodes = nodes;
-        pathFinder = GraphAlgoFactory.shortestPath(Traversal.expanderForAllTypes(), maxDepth);
+        pathFinder = GraphAlgoFactory.shortestPath(new PathExpander() {
+            @Override
+            public Iterable<Relationship> expand(Path path, BranchState state) {
+                final Node end = path.endNode();
+                if (isInNodeRange(end)) {
+                    return new RelationshipFilter(end);
+                }
+                return null;
+            }
+
+            @Override
+            public PathExpander reverse() {
+                return this;
+            }
+        }, maxDepth);
+    }
+
+    private boolean isInNodeRange(Node end) {
+        return end.getId() < maxNodeId;
     }
 
     public static void main(String[] args) throws InterruptedException {
@@ -51,25 +82,42 @@ public class Runner implements Runnable {
                 if (db != null) db.shutdown();
             }
         });
-        final long maxNodeId = db.getDependencyResolver().resolveDependency(NodeManager.class).getHighestPossibleIdInUse(Node.class) + 1;
-        System.out.println("maxNodeId = " + maxNodeId);
-        final int[] nodes = new int[(int)maxNodeId];
-        final int processors = Runtime.getRuntime().availableProcessors() * 4;
+        NodeManager nodeManager = db.getDependencyResolver().resolveDependency(NodeManager.class);
+        long maxNodeId = nodeManager.getHighestPossibleIdInUse(Node.class) + 1 ;
+        long memory = Runtime.getRuntime().freeMemory();
+        long nodesInMemory = memory / 2 / 1024;
+        System.out.println("maxNodeId = " + maxNodeId+" memory "+memory+" nodes in memory "+nodesInMemory);
+        final long nodeIdLimit = Math.min(nodesInMemory,maxNodeId);
+        long time=System.currentTimeMillis();
+        fillCache(db,nodeIdLimit);
+        System.out.println("filled cache with " + nodeIdLimit+" nodes in "+(System.currentTimeMillis()-time)+" ms.");
+        final int[] nodes = new int[(int)nodeIdLimit];
+        final int processors = Runtime.getRuntime().availableProcessors() * 2;
         System.out.println("processors = " + processors);
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
         final int timeInSeconds = 100;
         final int maxDepth = 10;
         Collection<Runner> runners=new ArrayList<Runner>();
         for (int i=0;i<processors;i++) {
-            final Runner runner = new Runner(db, i,maxNodeId, timeInSeconds, nodes, maxDepth);
+            final Runner runner = new Runner(db, i,nodeIdLimit, timeInSeconds, nodes, maxDepth);
             runners.add(runner);
             pool.submit(runner);
         }
         pool.shutdown();
         pool.awaitTermination(timeInSeconds*2, TimeUnit.SECONDS);
-        printTop(nodes,maxNodeId,10);
+        printTop(nodes,nodeIdLimit,10);
         printNumbers(runners,timeInSeconds);
 
+    }
+
+    private static void fillCache(GraphDatabaseAPI db, long maxNodeId) {
+        Iterable<Node> allNodes = GlobalGraphOperations.at(db).getAllNodes();
+        for (Node node : allNodes) {
+            for (Relationship relationship : node.getRelationships()) {
+                relationship.getOtherNode(node);
+            }
+            if (--maxNodeId==0) break;
+        }
     }
 
     private static void printNumbers(Collection<Runner> runners, int timeInSeconds) {
