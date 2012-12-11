@@ -22,6 +22,7 @@ import java.util.concurrent.*;
  * @since 23.11.12
  */
 public class Runner implements Runnable {
+    public static final int MEMORY_PER_NODE = 1024;
     private final GraphDatabaseAPI db;
     private final int timeInMillis;
     private final long maxNodeId;
@@ -86,12 +87,12 @@ public class Runner implements Runnable {
         NodeManager nodeManager = db.getDependencyResolver().resolveDependency(NodeManager.class);
         long maxNodeId = nodeManager.getHighestPossibleIdInUse(Node.class) + 1 ;
         long memory = Runtime.getRuntime().freeMemory();
-        long nodesInMemory = memory / 2 / 1024;
+        long nodesInMemory = memory / 2 / MEMORY_PER_NODE;
         System.out.println("maxNodeId = " + maxNodeId+" memory "+memory+" nodes in memory "+nodesInMemory);
         final long nodeIdLimit = Math.min(nodesInMemory,maxNodeId);
         long time=System.currentTimeMillis();
         long nodeAndRelCount = fillCache(nodeIdLimit, processors, nodeManager);
-        System.out.println("filled cache with up to " + nodeIdLimit+" nodes, "+nodeAndRelCount+" nodes and relationships in "+(System.currentTimeMillis()-time)+" ms.");
+        System.out.println("filled cache with up to " + nodeIdLimit+" nodes, "+nodeAndRelCount+" nodes+relationships in "+(System.currentTimeMillis()-time)+" ms.");
         final int[] nodes = new int[(int)nodeIdLimit];
         final int timeInSeconds = 100;
         final int maxDepth = 10;
@@ -114,7 +115,7 @@ public class Runner implements Runnable {
         Collection<Future<Integer>> futures=new ArrayList<Future<Integer>>(processors);
         for (int i=0;i<processors;i++) {
             long start = segment * i;
-            NodeSegmentCacheLoader loader = new NodeSegmentCacheLoader(start, segment, nodeManager);
+            NodeSegmentCacheLoader loader = new NodeSegmentCacheLoader(i, segment, nodeManager);
             Future<Integer> future = pool.submit(loader);
             futures.add(future);
         }
