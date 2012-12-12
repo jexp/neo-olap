@@ -2,6 +2,7 @@ package org.neo4j.olap;
 
 import org.neo4j.graphdb.*;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.helpers.Pair;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.impl.core.NodeManager;
@@ -89,25 +90,9 @@ public class Runner {
     }
 
     private static void printTop(int[] nodes, long maxNodeId, int howMany) {
-        int[] ids = new int[howMany];
-        int[] counts = new int[howMany];
-        int minCount = 0;
-        int minIdx = 0;
-        for (int i = 0; i < maxNodeId; i++) {
-            if (nodes[i] > minCount) {
-                ids[minIdx] = i;
-                counts[minIdx] = nodes[i];
-                minCount = nodes[i];
-                for (int j = 0; j < howMany; j++) {
-                    if (counts[j] < minCount) {
-                        minCount = counts[j];
-                        minIdx = j;
-                    }
-                }
-            }
-        }
-        for (int j = 0; j < howMany; j++) {
-            System.out.printf("Node %d Count %d%n", ids[j], counts[j]);
+        final TopNSelector selector = new TopNSelector(nodes, maxNodeId);
+        for (Pair<Integer, Integer> pair : selector.selectTopN(howMany)) {
+            System.out.printf("Node %d Count %d%n", pair.first(), pair.other());
         }
     }
 
