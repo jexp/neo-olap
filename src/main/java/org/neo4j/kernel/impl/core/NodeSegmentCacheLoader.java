@@ -38,6 +38,7 @@ public class NodeSegmentCacheLoader implements Callable<Integer> {
                 count++;
             }
         }
+        System.out.printf("%2d. 100%% Done, loaded %d nodes+relationships %n",index,count);
         return count;
     }
 }
