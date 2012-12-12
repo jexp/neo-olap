@@ -1,12 +1,7 @@
 package org.neo4j.olap;
 
-import org.neo4j.graphalgo.GraphAlgoFactory;
-import org.neo4j.graphalgo.PathFinder;
 import org.neo4j.graphdb.*;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
-import org.neo4j.graphdb.traversal.BranchState;
-import org.neo4j.helpers.Predicate;
-import org.neo4j.helpers.collection.FilteringIterable;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.impl.core.NodeManager;
@@ -21,55 +16,10 @@ import java.util.concurrent.*;
  * @author mh
  * @since 23.11.12
  */
-public class Runner implements Runnable {
+public class Runner {
     public static final int MEMORY_PER_NODE = 1024;
-    private final GraphDatabaseAPI db;
-    private final int timeInMillis;
-    private final long maxNodeId;
-    private final Random random = new Random();
-    private final PathFinder<Path> pathFinder;
-    private int[] nodes;
-    private volatile int pathCount = 0;
-    private volatile int nodeCount = 0;
-    private int id;
-
-    class RelationshipFilter extends FilteringIterable<Relationship> {
-        RelationshipFilter(final Node node) {
-            super(node.getRelationships(), new Predicate<Relationship>() {
-                @Override
-                public boolean accept(Relationship item) {
-                    return isInNodeRange(item.getOtherNode(node));
-                }
-            });
-        }
-    }
-
-    public Runner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes, int maxDepth) {
-        this.db = db;
-        this.id = id;
-        this.timeInMillis = timeInSeconds * 1000;
-        this.maxNodeId = maxNodeId;
-        this.nodes = nodes;
-        pathFinder = GraphAlgoFactory.shortestPath(new PathExpander() {
-            @Override
-            public Iterable<Relationship> expand(Path path, BranchState state) {
-                final Node end = path.endNode();
-                if (isInNodeRange(end)) {
-                    return new RelationshipFilter(end);
-                }
-                return null;
-            }
-
-            @Override
-            public PathExpander reverse() {
-                return this;
-            }
-        }, maxDepth);
-    }
-
-    private boolean isInNodeRange(Node end) {
-        return end.getId() < maxNodeId;
-    }
+    private static final int maxDepth = 10;
+    private static final int timeInSeconds = 100;
 
     public static void main(String[] args) throws Exception {
         final String path = args[0];
@@ -94,18 +44,16 @@ public class Runner implements Runnable {
         long nodeAndRelCount = fillCache(nodeIdLimit, processors, nodeManager);
         System.out.println("filled cache with up to " + nodeIdLimit+" nodes, "+nodeAndRelCount+" nodes+relationships in "+(System.currentTimeMillis()-time)+" ms.");
         final int[] nodes = new int[(int)nodeIdLimit];
-        final int timeInSeconds = 100;
-        final int maxDepth = 10;
-        Collection<Runner> runners=new ArrayList<Runner>();
+        Collection<OlapRunner> runners=new ArrayList<OlapRunner>();
         for (int i=0;i<processors;i++) {
-            final Runner runner = new Runner(db, i,nodeIdLimit, timeInSeconds, nodes, maxDepth);
+            final OlapRunner runner = new RandomWalkingRunner(db, i,nodeIdLimit, timeInSeconds, nodes);
             runners.add(runner);
             pool.submit(runner);
         }
         pool.shutdown();
-        pool.awaitTermination(timeInSeconds*2, TimeUnit.SECONDS);
+        pool.awaitTermination(timeInSeconds *2, TimeUnit.SECONDS);
         printTop(nodes,nodeIdLimit,10);
-        printNumbers(runners,timeInSeconds);
+        printNumbers(runners, timeInSeconds);
 
     }
 
@@ -127,46 +75,13 @@ public class Runner implements Runnable {
         return count;
     }
 
-    private static void printNumbers(Collection<Runner> runners, int timeInSeconds) {
+    private static void printNumbers(Collection<OlapRunner> runners, int timeInSeconds) {
         int pathCount=0,nodeCount=0;
-        for (Runner runner : runners) {
-            pathCount+=runner.getPathCount();
+        for (OlapRunner runner : runners) {
+            pathCount+=runner.getHitCount();
             nodeCount+=runner.getNodeCount();
         }
         System.out.printf("In %d seconds %d paths %d nodes %n", timeInSeconds, pathCount, nodeCount);
-    }
-
-    public void run() {
-        long time = System.currentTimeMillis();
-        while (true) {
-            final Iterable<Path> paths = pathFinder.findAllPaths(randomNode(), randomNode());
-            for (Path path : paths) {
-                pathCount++;
-                countNodes(path);
-                nodeCount += path.length()+1;
-            }
-            if (System.currentTimeMillis() - time > timeInMillis) break;
-        }
-        System.out.printf("Thread %d In %d seconds %d paths %d nodes %n", id, (System.currentTimeMillis() - time)/1000, pathCount, nodeCount);
-    }
-
-    public int getPathCount() {
-        return pathCount;
-    }
-
-    public int getNodeCount() {
-        return nodeCount;
-    }
-
-    private void countNodes(Path path) {
-        final Iterator<Node> it = path.nodes().iterator();
-        it.next(); // ignore first
-        while (it.hasNext()) {
-            final Node node = it.next();
-            if (it.hasNext()) { // ignore last
-                nodes[((int) node.getId())]++;
-            }
-        }
     }
 
     private static void printTop(int[] nodes, long maxNodeId, int howMany) {
@@ -189,17 +104,6 @@ public class Runner implements Runnable {
         }
         for (int j = 0; j < howMany; j++) {
             System.out.printf("Node %d Count %d%n", ids[j], counts[j]);
-        }
-    }
-
-    private Node randomNode() {
-        while (true) {
-            try {
-                final long id = ( random.nextLong() % maxNodeId );
-                return db.getNodeById(id);
-            } catch (NotFoundException nfe) {
-
-            }
         }
     }
 
