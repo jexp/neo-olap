@@ -17,16 +17,18 @@ public class RandomWalkingRunner extends OlapRunner {
         long time = System.currentTimeMillis();
         Node node=randomNode();
         while (true) {
+            Node newNode=null;
             for (Relationship relationship : node.getRelationships()) {
-                final Node newNode = relationship.getOtherNode(node);
+                Node otherNode = relationship.getOtherNode(node);
                 nodeCount++;
-                if (random.nextBoolean() && isInNodeRange(newNode)) {
-                    node = newNode;
+                if (random.nextBoolean() && isInNodeRange(otherNode)) {
+                    newNode = otherNode;
                     hitCount++;
-                    nodes[((int) node.getId())]++;
+                    nodes[((int) newNode.getId())]++;
                     break;
                 }
             }
+            if (newNode==null) node=randomNode();
             if (System.currentTimeMillis() - time > timeInMillis) break;
         }
         System.out.printf("Thread %d In %d seconds %d hits %d nodes %n", id, (System.currentTimeMillis() - time)/1000, hitCount, nodeCount);
