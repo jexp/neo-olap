@@ -17,8 +17,8 @@ import java.util.concurrent.*;
  * @since 23.11.12
  */
 public class Runner {
-    public static final int MEMORY_PER_NODE = 1024;
-    private static final int maxDepth = 10;
+    public static final int MEMORY_PER_NODE = 5*1024;
+    private static final int MEGABYTE = 1024*1024;
     private static final int timeInSeconds = 100;
 
     public static void main(String[] args) throws Exception {
@@ -38,11 +38,15 @@ public class Runner {
         long maxNodeId = nodeManager.getHighestPossibleIdInUse(Node.class) + 1 ;
         long memory = Runtime.getRuntime().freeMemory();
         long nodesInMemory = memory / 2 / MEMORY_PER_NODE;
-        System.out.println("maxNodeId = " + maxNodeId+" memory "+memory+" nodes in memory "+nodesInMemory);
         final long nodeIdLimit = Math.min(nodesInMemory,maxNodeId);
+
+        System.out.printf("maxNodeId = %d memory %d MB nodes in memory %d nodeIdLimit %d%n", maxNodeId, memory / MEGABYTE, nodesInMemory,nodeIdLimit);
         long time=System.currentTimeMillis();
-        long nodeAndRelCount = fillCache(nodeIdLimit, processors, nodeManager);
-        System.out.println("filled cache with up to " + nodeIdLimit+" nodes, "+nodeAndRelCount+" nodes+relationships in "+(System.currentTimeMillis()-time)+" ms.");
+        long nodeAndRelCount = fillCache(nodeIdLimit, processors/4, nodeManager);
+        System.out.printf("filled cache with up to %d nodes, %d nodes+relationships in %d ms, memory %d MB%n", nodeIdLimit, nodeAndRelCount,
+                            System.currentTimeMillis() - time, Runtime.getRuntime().freeMemory() / MEGABYTE);
+
+
         final int[] nodes = new int[(int)nodeIdLimit];
         Collection<OlapRunner> runners=new ArrayList<OlapRunner>();
         for (int i=0;i<processors;i++) {
