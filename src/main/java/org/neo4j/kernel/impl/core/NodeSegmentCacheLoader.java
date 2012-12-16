@@ -21,7 +21,7 @@ public class NodeSegmentCacheLoader implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         int count=0;
-        long fragment = segment / 10;
+        long fragment = segment / 4;
         long start = minNodeId + index * segment;
         long end = start + segment;
         System.out.printf("%2d. Loading nodes from %10d up to %10d%n",index,start,end);

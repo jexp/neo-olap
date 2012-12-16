@@ -19,7 +19,7 @@ import java.util.concurrent.*;
  * @since 23.11.12
  */
 public class Runner {
-    public static final int MEMORY_PER_NODE = 5*1024;
+    public static final int MEMORY_PER_NODE = 1024;
     private static final int MEGABYTE = 1024*1024;
     private static final int timeInSeconds = 100;
 
