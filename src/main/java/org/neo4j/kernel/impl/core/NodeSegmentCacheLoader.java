@@ -6,6 +6,7 @@ import org.neo4j.graphdb.Relationship;
 import java.util.concurrent.Callable;
 
 public class NodeSegmentCacheLoader implements Callable<Integer> {
+    private static final int LOG_PARTS = 4;
     private final long segment;
     private final NodeManager nodeManager;
     private final long minNodeId;
@@ -21,7 +22,7 @@ public class NodeSegmentCacheLoader implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         int count=0;
-        long fragment = segment / 4;
+        long fragment = segment / LOG_PARTS;
         long start = minNodeId + index * segment;
         long end = start + segment;
         System.out.printf("%2d. Loading nodes from %10d up to %10d%n",index,start,end);
@@ -29,7 +30,7 @@ public class NodeSegmentCacheLoader implements Callable<Integer> {
         for(long n = start;n < end; n++) {
             Node node = nodeManager.getNodeByIdOrNull(n);
             if (n > logAt) {
-                System.out.printf("%2d. %3d%%%n",index,10*(n-start)/fragment);
+                System.out.printf("%2d. %3d%%%n",index,100/LOG_PARTS*(n-start)/fragment);
                 System.out.flush();
                 logAt+=fragment;
             }

@@ -25,8 +25,8 @@ public abstract class OlapRunner implements Runnable {
 
     protected final long maxNodeCount;
     protected int[] nodes;
-    protected volatile int nodeCount = 0;
-    protected volatile int hitCount = 0;
+    protected volatile long nodeCount = 0;
+    protected volatile long hitCount = 0;
     private final long minNodeId;
 
     public OlapRunner(int timeInSeconds, int id, final int[] nodes, GraphDatabaseAPI db, long minNodeId, final long nodeCount) {
@@ -42,7 +42,7 @@ public abstract class OlapRunner implements Runnable {
         return id >= minNodeId && id < minNodeId + maxNodeCount;
     }
 
-    public int getNodeCount() {
+    public long getNodeCount() {
         return nodeCount;
     }
 
@@ -68,7 +68,7 @@ public abstract class OlapRunner implements Runnable {
         }
     }
 
-    public int getHitCount() {
+    public long getHitCount() {
         return hitCount;
     }
 
