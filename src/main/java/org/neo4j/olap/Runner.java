@@ -5,12 +5,12 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
-import org.neo4j.kernel.impl.cache.Cache;
 import org.neo4j.kernel.impl.core.NodeManager;
 import org.neo4j.kernel.impl.core.NodeSegmentCacheLoader;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -52,9 +52,28 @@ public class Runner {
 
         for (long minNodeId=0;minNodeId+nodesPerRound < maxNodeId;minNodeId+=nodesPerRound) {
             runRound(nodes, minNodeId, nodesPerRound);
+            final String roundFileName = String.format("page_rank_%d_%d.int", minNodeId, nodesPerRound);
+            storeArray(roundFileName,nodes);
         }
 
         printTop(nodes, 10);
+        storeArray("page_rank.int", nodes);
+    }
+
+    private void storeArray(String fileName,int[] nodes) throws IOException {
+        long time=System.currentTimeMillis();
+        newArrayStore(fileName).write(nodes);
+        System.out.printf("Stored %d nodes in %d ms.%n", nodes.length, System.currentTimeMillis() - time);
+    }
+    private int[] loadArray(final String fileName) throws IOException {
+        long time=System.currentTimeMillis();
+        final int[] nodes = newArrayStore(fileName).read();
+        System.out.printf("Loaded %d nodes in %d ms.%n", nodes.length, System.currentTimeMillis() - time);
+        return nodes;
+    }
+
+    private ArrayStore newArrayStore(String fileName) {
+        return new ArrayStore(fileName);
     }
 
     private long determineNodesPerRound(long maxNodeId) {
