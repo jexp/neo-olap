@@ -9,8 +9,8 @@ import org.neo4j.kernel.GraphDatabaseAPI;
  * @since 23.11.12
  */
 public class RandomWalkingRunner extends OlapRunner {
-    public RandomWalkingRunner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes) {
-        super(timeInSeconds, id, nodes, db, maxNodeId);
+    public RandomWalkingRunner(GraphDatabaseAPI db, int id, long minNodeId, final long nodeCount, int timeInSeconds, final int[] nodes) {
+        super(timeInSeconds, id, nodes, db,minNodeId, nodeCount);
     }
 
     public void run() {
@@ -21,7 +21,7 @@ public class RandomWalkingRunner extends OlapRunner {
             for (Relationship relationship : node.getRelationships()) {
                 Node otherNode = relationship.getOtherNode(node);
                 nodeCount++;
-                if (random.nextBoolean() && isInNodeRange(otherNode)) {
+                if (random.nextBoolean() && this.isInNodeRange(otherNode.getId())) {
                     newNode = otherNode;
                     hitCount++;
                     nodes[((int) newNode.getId())]++;

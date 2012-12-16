@@ -8,9 +8,11 @@ import java.util.concurrent.Callable;
 public class NodeSegmentCacheLoader implements Callable<Integer> {
     private final long segment;
     private final NodeManager nodeManager;
+    private final long minNodeId;
     private final long index;
 
-    public NodeSegmentCacheLoader(long index, long segment, NodeManager nodeManager) {
+    public NodeSegmentCacheLoader(long minNodeId,long index, long segment, NodeManager nodeManager) {
+        this.minNodeId = minNodeId;
         this.index = index;
         this.segment = segment;
         this.nodeManager = nodeManager;
@@ -20,8 +22,8 @@ public class NodeSegmentCacheLoader implements Callable<Integer> {
     public Integer call() throws Exception {
         int count=0;
         long fragment = segment / 10;
-        long start = index * segment;
-        long end = (index+1) * segment;
+        long start = minNodeId + index * segment;
+        long end = start + segment;
         System.out.printf("%2d. Loading nodes from %10d up to %10d%n",index,start,end);
         long logAt = start + fragment;
         for(long n = start;n < end; n++) {

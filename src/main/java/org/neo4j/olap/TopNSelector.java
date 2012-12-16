@@ -15,9 +15,9 @@ public class TopNSelector {
     private final int[] nodes;
     private final long maxNodeId;
 
-    public TopNSelector(int[] nodes, long maxNodeId) {
+    public TopNSelector(int[] nodes) {
         this.nodes = nodes;
-        this.maxNodeId = maxNodeId;
+        this.maxNodeId = nodes.length;
     }
 
     List<Pair<Integer,Integer>> selectTopN(int howMany) {

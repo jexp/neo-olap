@@ -13,13 +13,13 @@ import org.neo4j.kernel.GraphDatabaseAPI;
 public class PathFinderNodeCountingRunner extends OlapRunner {
     private final PathFinder<Path> pathFinder;
 
-    public PathFinderNodeCountingRunner(GraphDatabaseAPI db, int id, final long maxNodeId, int timeInSeconds, final int[] nodes, int maxDepth) {
-        super(timeInSeconds, id, nodes, db, maxNodeId);
+    public PathFinderNodeCountingRunner(GraphDatabaseAPI db, int id, long minNodeId, long nodeCount, int timeInSeconds, final int[] nodes, int maxDepth) {
+        super(timeInSeconds, id, nodes, db, minNodeId, nodeCount);
         pathFinder = GraphAlgoFactory.shortestPath(new PathExpander() {
             @Override
             public Iterable<Relationship> expand(Path path, BranchState state) {
                 final Node end = path.endNode();
-                if (isInNodeRange(end)) {
+                if (PathFinderNodeCountingRunner.this.isInNodeRange(end.getId())) {
                     return new RelationshipFilter(end);
                 }
                 return null;

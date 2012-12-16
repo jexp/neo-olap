@@ -23,21 +23,23 @@ public abstract class OlapRunner implements Runnable {
     protected final GraphDatabaseAPI db;
     protected final int timeInMillis;
 
-    protected final long maxNodeId;
+    protected final long maxNodeCount;
     protected int[] nodes;
     protected volatile int nodeCount = 0;
     protected volatile int hitCount = 0;
+    private final long minNodeId;
 
-    public OlapRunner(int timeInSeconds, int id, final int[] nodes, GraphDatabaseAPI db, final long maxNodeId) {
+    public OlapRunner(int timeInSeconds, int id, final int[] nodes, GraphDatabaseAPI db, long minNodeId, final long nodeCount) {
+        this.minNodeId = minNodeId;
         this.timeInMillis = timeInSeconds * 1000;
         this.id = id;
         this.nodes = nodes;
         this.db = db;
-        this.maxNodeId = maxNodeId;
+        this.maxNodeCount = nodeCount;
     }
 
-    protected boolean isInNodeRange(Node node) {
-        return node.getId() < maxNodeId;
+    protected boolean isInNodeRange(long id) {
+        return id >= minNodeId && id < minNodeId + maxNodeCount;
     }
 
     public int getNodeCount() {
@@ -58,8 +60,8 @@ public abstract class OlapRunner implements Runnable {
     protected Node randomNode() {
         while (true) {
             try {
-                final long id = ( random.nextLong() % maxNodeId );
-                return db.getNodeById(id);
+                final long id = minNodeId + ( random.nextLong() % maxNodeCount);
+                if (isInNodeRange(id)) return db.getNodeById(id);
             } catch (NotFoundException nfe) {
 
             }
@@ -75,7 +77,8 @@ public abstract class OlapRunner implements Runnable {
             super(node.getRelationships(), new Predicate<Relationship>() {
                 @Override
                 public boolean accept(Relationship item) {
-                    return isInNodeRange(item.getOtherNode(node));
+                    final Node otherNode = item.getOtherNode(node);
+                    return isInNodeRange(otherNode.getId());
                 }
             });
         }

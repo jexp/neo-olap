@@ -3,7 +3,6 @@ package org.neo4j.olap;
 import org.junit.Test;
 import org.neo4j.helpers.Pair;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -16,7 +15,7 @@ public class TopNSelectorTest {
     @Test
     public void testSelectTopOne() throws Exception {
         final int[] data = {6, 3, 1, 9};
-        final TopNSelector selector = new TopNSelector(data, data.length);
+        final TopNSelector selector = new TopNSelector(data);
         final List<Pair<Integer,Integer>> pairs = selector.selectTopN(1);
         assertEquals(1,pairs.size());
         assertEquals(3, (int)pairs.get(0).first());
@@ -25,7 +24,7 @@ public class TopNSelectorTest {
     @Test
     public void testSelectTopThree() throws Exception {
         final int[] data = {6, 3, 1, 9};
-        final TopNSelector selector = new TopNSelector(data, data.length);
+        final TopNSelector selector = new TopNSelector(data);
         final List<Pair<Integer,Integer>> pairs = selector.selectTopN(3);
         assertEquals(3,pairs.size());
         assertEquals(3, (int)pairs.get(0).first());
@@ -46,7 +45,7 @@ public class TopNSelectorTest {
         data[1000]=100002;
         data[2000]=100003;
 
-        final TopNSelector selector = new TopNSelector(data, data.length);
+        final TopNSelector selector = new TopNSelector(data);
         final List<Pair<Integer,Integer>> pairs = selector.selectTopN(3);
         assertEquals(3,pairs.size());
         assertEquals(2000, (int)pairs.get(0).first());
