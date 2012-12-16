@@ -105,7 +105,7 @@ public class Runner {
         final int processors = getMaxNumberOfThreads();
 
         long time = System.currentTimeMillis();
-        nodeManager.clearCache();
+        // nodeManager.clearCache();
         long nodeAndRelCount = fillCache(minNodeId, nodeCount, processors / 4, nodeManager);
         System.out.printf("filled cache with up to %d nodes, %d nodes+relationships in %d ms, memory %d MB%n", nodeCount, nodeAndRelCount,
                 System.currentTimeMillis() - time, Runtime.getRuntime().freeMemory() / MEGABYTE);
