@@ -1,12 +1,16 @@
 package org.neo4j.olap;
 
+import org.neo4j.graphdb.DependencyResolver;
 import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.impl.core.NodeManager;
-import org.neo4j.kernel.impl.core.NodeSegmentCacheLoader;
+import org.neo4j.kernel.impl.core.NodePreloader;
+import org.neo4j.kernel.impl.core.Preloader;
+import org.neo4j.kernel.impl.core.RelationshipPreloader;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -101,12 +105,12 @@ public class Runner {
     }
 
     private void runRound(int[] nodes, long minNodeId, long nodeCount) throws ExecutionException, InterruptedException {
-        NodeManager nodeManager = db.getDependencyResolver().resolveDependency(NodeManager.class);
+        final DependencyResolver dependencyResolver = db.getDependencyResolver();
         final int processors = getMaxNumberOfThreads();
 
         long time = System.currentTimeMillis();
         // nodeManager.clearCache();
-        long nodeAndRelCount = fillCache(minNodeId, nodeCount, processors / 4, nodeManager);
+        long nodeAndRelCount = fillCache(minNodeId, nodeCount, processors / 4, dependencyResolver);
         System.out.printf("filled cache with up to %d nodes, %d nodes+relationships in %d ms, memory %d MB%n", nodeCount, nodeAndRelCount,
                 System.currentTimeMillis() - time, Runtime.getRuntime().freeMemory() / MEGABYTE);
 
@@ -128,20 +132,52 @@ public class Runner {
         return new RandomWalkingRunner(db, i, minNodeId, nodeCount, timeInSeconds, nodes);
     }
 
-    protected long fillCache(long minNodeId, long nodeCount, int processors, final NodeManager nodeManager) throws ExecutionException, InterruptedException {
-        final long segment = nodeCount / processors;
+    protected long fillCache(final long minNodeId, final long nodeCount, int processors, final DependencyResolver dependencyResolver) throws ExecutionException, InterruptedException {
+
         final ExecutorService pool = Executors.newFixedThreadPool(processors);
+
+        final long preloadedRels = preloadRelationships(minNodeId, nodeCount, processors, dependencyResolver, pool);
+
+        final long nodesAndRels = preloadNodes(minNodeId, nodeCount, processors, dependencyResolver, pool);
+        
+        pool.shutdown();
+        return nodesAndRels;
+    }
+
+    private long preloadNodes(long minNodeId, long nodeCount, int processors, DependencyResolver dependencyResolver, ExecutorService pool) throws InterruptedException, ExecutionException {
+        long time=System.currentTimeMillis();
+        final long nodeSegment = nodeCount / processors;
         Collection<Future<Integer>> futures = new ArrayList<Future<Integer>>(processors);
         for (int i = 0; i < processors; i++) {
-            NodeSegmentCacheLoader loader = new NodeSegmentCacheLoader(minNodeId, i, segment, nodeManager);
-            Future<Integer> future = pool.submit(loader);
-            futures.add(future);
+            Preloader loader = new NodePreloader(i,nodeSegment,minNodeId,nodeSegment, dependencyResolver);
+            futures.add(pool.submit(loader));
         }
         long count = 0;
         for (Future<Integer> future : futures) {
             count += future.get();
         }
-        pool.shutdown();
+        System.out.printf("Preloaded %d nodes and relationships in %d ms%n",count,(System.currentTimeMillis()-time));
+        return count;
+    }
+
+    private long preloadRelationships(long minNodeId, long nodeCount, int processors, DependencyResolver dependencyResolver, ExecutorService pool) throws InterruptedException, ExecutionException {
+        long time=System.currentTimeMillis();
+
+        final NodeManager nodeManager = dependencyResolver.resolveDependency(NodeManager.class);
+
+        final long highestRelId = nodeManager.getHighestPossibleIdInUse(Relationship.class);
+        final long relSegment = highestRelId / processors;
+
+        Collection<Future<Integer>> futures = new ArrayList<Future<Integer>>(processors);
+        for (int i = 0; i < processors; i++) {
+            Callable<Integer> loader = new RelationshipPreloader(i, relSegment, minNodeId, nodeCount,dependencyResolver);
+            futures.add(pool.submit(loader));
+        }
+        long count = 0;
+        for (Future<Integer> future : futures) {
+            count += future.get();
+        }
+        System.out.printf("Preloaded %d relationships in %d ms%n",count,(System.currentTimeMillis()-time));
         return count;
     }
 
